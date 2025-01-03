@@ -24,6 +24,8 @@
 #include <chrono>
 #include <ctime>
 #include <sstream>
+#include <arpa/inet.h>
+#include <unistd.h>
 
 #include <condition_variable>
 
@@ -121,6 +123,25 @@ int main(int argc, char **argv) {
 
     if (argc == 4) {
         file_name = string(argv[argc - 1]);
+    }
+
+    const char *server_ip = "127.0.0.1";
+    const int server_port = 12345;
+
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        std::cerr << "Socket creation failed\n";
+        return -1;
+    }
+
+    sockaddr_in server_addr{};
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(server_port);
+    inet_pton(AF_INET, server_ip, &server_addr.sin_addr);
+
+    if (connect(sock, (sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        std::cerr << "Connection to server failed\n";
+        return -1;
     }
 
     struct sigaction sigIntHandler;
@@ -346,7 +367,7 @@ int main(int argc, char **argv) {
     double t_resize = 0.f;
     double t_track = 0.f;
 
-    while (!SLAM.isShutDown())
+    while (!b_continue_session)
     {
         std::vector<rs2_vector> vGyro;
         std::vector<double> vGyro_times;
@@ -440,6 +461,7 @@ int main(int argc, char **argv) {
     #endif
 #endif
         // Stereo images are already rectified.
+        std::cout << "one iter" << std::endl;
         Sophus::SE3f Tcw = SLAM.TrackStereo(im, imRight, timestamp, vImuMeas);
         printSE3fComponents(Tcw);
 #ifdef REGISTER_TIMES
@@ -451,8 +473,6 @@ int main(int argc, char **argv) {
         t_track = t_resize + std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(t_End_Track - t_Start_Track).count();
         SLAM.InsertTrackTime(t_track);
 #endif
-
-
 
         // Clear the previous IMU measurements to load the new ones
         vImuMeas.clear();

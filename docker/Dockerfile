@@ -47,6 +47,8 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     mpich \
     iputils-ping \
     kbd \
+    libgtk2.0-dev \
+    pkg-config \
     python3-pip
 
 # Add ORB_SLAM3 dependencies
@@ -83,6 +85,17 @@ RUN git clone https://github.com/stevenlovegrove/Pangolin.git && \
     make install
 
 # RealSense dependencies
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y \
+    udev \
+    libssl-dev \
+    libusb-1.0-0-dev \
+    libudev-dev \
+    libgtk-3-dev \
+    libglfw3-dev \
+    libgl1-mesa-dev \
+    libglu1-mesa-dev \
+    libcanberra-gtk-module
 RUN mkdir -p /etc/apt/keyrings && \
     curl -sSf https://librealsense.intel.com/Debian/librealsense.pgp | \
     tee /etc/apt/keyrings/librealsense.pgp > /dev/null && \
