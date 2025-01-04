@@ -105,28 +105,41 @@ void printSE3fComponents(const Sophus::SE3f& se3) {
     Eigen::Matrix3f rotationMatrix = se3.so3().matrix();
     std::cout << "Rotation matrix: \n" << rotationMatrix << std::endl;
 
-    // Optionally, you can also access the rotation as a quaternion
-    Eigen::Quaternionf quaternion = se3.unit_quaternion();
-    std::cout << "Rotation quaternion: " << quaternion.coeffs().transpose() << std::endl;
+    Eigen::Matrix<float, 3, 4> matrix3x4 = se3.matrix3x4();
+    std::cout << "Transformation: \n" << matrix3x4 << std::endl;
+}
+
+std::string serializePose(const Eigen::Matrix<float, 3, 4>& pose) {
+    std::ostringstream oss;
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            ss << pose(i, j) << ",";
+        }
+    }
+    std::string data = oss.str();
+    data.pop_back();
+    return data;
 }
 
 int main(int argc, char **argv) {
 
     if (argc < 3 || argc > 4) {
         cerr << endl
-             << "Usage: ./stereo_inertial_realsense_D435i path_to_vocabulary path_to_settings (trajectory_file_name)"
+             << "Usage: ./stereo_inertial_realsense_D435i path_to_vocabulary path_to_settings "
              << endl;
         return 1;
     }
-
-    string file_name;
-
-    if (argc == 4) {
-        file_name = string(argv[argc - 1]);
-    }
-
     const char *server_ip = "127.0.0.1";
     const int server_port = 12345;
+    if (argc == 4) {
+        server_port = atoi(argv[3]); // Convert the port argument to an integer
+        if (server_port <= 0) {
+            std::cerr << "Invalid port number. Please provide a valid positive integer.\n";
+            return 1;
+        }
+    }
+
+    cout << "Server port set to: " << server_port << endl;
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
@@ -144,6 +157,7 @@ int main(int argc, char **argv) {
         return -1;
     }
 
+    string file_name;
     struct sigaction sigIntHandler;
 
     sigIntHandler.sa_handler = exit_loop_handler;
@@ -325,31 +339,6 @@ int main(int argc, char **argv) {
     rs2_intrinsics intrinsics_left = cam_left.as<rs2::video_stream_profile>().get_intrinsics();
     width_img = intrinsics_left.width;
     height_img = intrinsics_left.height;
-    cout << "Left camera: \n";
-    std::cout << " fx = " << intrinsics_left.fx << std::endl;
-    std::cout << " fy = " << intrinsics_left.fy << std::endl;
-    std::cout << " cx = " << intrinsics_left.ppx << std::endl;
-    std::cout << " cy = " << intrinsics_left.ppy << std::endl;
-    std::cout << " height = " << intrinsics_left.height << std::endl;
-    std::cout << " width = " << intrinsics_left.width << std::endl;
-    std::cout << " Coeff = " << intrinsics_left.coeffs[0] << ", " << intrinsics_left.coeffs[1] << ", " <<
-        intrinsics_left.coeffs[2] << ", " << intrinsics_left.coeffs[3] << ", " << intrinsics_left.coeffs[4] << ", " << std::endl;
-    std::cout << " Model = " << intrinsics_left.model << std::endl;
-
-    rs2_intrinsics intrinsics_right = cam_right.as<rs2::video_stream_profile>().get_intrinsics();
-    width_img = intrinsics_right.width;
-    height_img = intrinsics_right.height;
-    cout << "Right camera: \n";
-    std::cout << " fx = " << intrinsics_right.fx << std::endl;
-    std::cout << " fy = " << intrinsics_right.fy << std::endl;
-    std::cout << " cx = " << intrinsics_right.ppx << std::endl;
-    std::cout << " cy = " << intrinsics_right.ppy << std::endl;
-    std::cout << " height = " << intrinsics_right.height << std::endl;
-    std::cout << " width = " << intrinsics_right.width << std::endl;
-    std::cout << " Coeff = " << intrinsics_right.coeffs[0] << ", " << intrinsics_right.coeffs[1] << ", " <<
-        intrinsics_right.coeffs[2] << ", " << intrinsics_right.coeffs[3] << ", " << intrinsics_right.coeffs[4] << ", " << std::endl;
-    std::cout << " Model = " << intrinsics_right.model << std::endl;
-
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
     ORB_SLAM3::System SLAM(argv[1],argv[2],ORB_SLAM3::System::IMU_STEREO, false, 0, file_name);
@@ -464,6 +453,9 @@ int main(int argc, char **argv) {
         std::cout << "one iter" << std::endl;
         Sophus::SE3f Tcw = SLAM.TrackStereo(im, imRight, timestamp, vImuMeas);
         printSE3fComponents(Tcw);
+        std::string data = serializePose(Tcw.matrix3x4());
+
+        send(sock, data.c_str(), data.size(), 0);
 #ifdef REGISTER_TIMES
     #ifdef COMPILEDWITHC11
         std::chrono::steady_clock::time_point t_End_Track = std::chrono::steady_clock::now();
