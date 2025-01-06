@@ -113,7 +113,7 @@ std::string serializePose(const Eigen::Matrix<float, 3, 4>& pose) {
     std::ostringstream oss;
     for (int i = 0; i < 3; ++i) {
         for (int j = 0; j < 4; ++j) {
-            ss << pose(i, j) << ",";
+            oss << pose(i, j) << ",";
         }
     }
     std::string data = oss.str();
@@ -130,7 +130,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     const char *server_ip = "127.0.0.1";
-    const int server_port = 12345;
+    int server_port = 12345;
     if (argc == 4) {
         server_port = atoi(argv[3]); // Convert the port argument to an integer
         if (server_port <= 0) {
@@ -139,22 +139,30 @@ int main(int argc, char **argv) {
         }
     }
 
-    cout << "Server port set to: " << server_port << endl;
+    cout << "C++: Server port set to: " << server_port << endl;
 
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        std::cerr << "Socket creation failed\n";
-        return -1;
-    }
-
+    int sock;
     sockaddr_in server_addr{};
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(server_port);
     inet_pton(AF_INET, server_ip, &server_addr.sin_addr);
 
-    if (connect(sock, (sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        std::cerr << "Connection to server failed\n";
-        return -1;
+    bool connected = false;
+    while (!connected) {
+        sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) {
+            std::cerr << "C++: Socket creation failed\n";
+            return -1;
+        }
+        if (connect(sock, (sockaddr *)&server_addr, sizeof(server_addr)) == 0) {
+            cout << "C++: Connected successfully to the server on port " << server_port << endl;
+            connected = true;
+        }
+        else {
+            cerr << "C++: Connection failed, retrying in 2 seconds..." << endl;
+            close (sock);
+            this_thread::sleep_for(chrono::seconds(2));
+        }
     }
 
     string file_name;
@@ -192,7 +200,7 @@ int main(int argc, char **argv) {
                 sensor.set_option(RS2_OPTION_EMITTER_ENABLED, 0); // switch off emitter
             }
             // std::cout << "  " << index << " : " << sensor.get_info(RS2_CAMERA_INFO_NAME) << std::endl;
-            get_sensor_option(sensor);
+            // get_sensor_option(sensor);
             if (index == 2){
                 // RGB camera (not used here...)
                 sensor.set_option(RS2_OPTION_EXPOSURE,100.f);
@@ -316,25 +324,6 @@ int main(int argc, char **argv) {
 
 
     rs2::stream_profile imu_stream = pipe_profile.get_stream(RS2_STREAM_GYRO);
-    float* Rbc = cam_left.get_extrinsics_to(imu_stream).rotation;
-    float* tbc = cam_left.get_extrinsics_to(imu_stream).translation;
-    std::cout << "Tbc (left) = " << std::endl;
-    for(int i = 0; i<3; i++){
-        for(int j = 0; j<3; j++)
-            std::cout << Rbc[i*3 + j] << ", ";
-        std::cout << tbc[i] << "\n";
-    }
-
-    float* Rlr = cam_right.get_extrinsics_to(cam_left).rotation;
-    float* tlr = cam_right.get_extrinsics_to(cam_left).translation;
-    std::cout << "Tlr  = " << std::endl;
-    for(int i = 0; i<3; i++){
-        for(int j = 0; j<3; j++)
-            std::cout << Rlr[i*3 + j] << ", ";
-        std::cout << tlr[i] << "\n";
-    }
-
-
 
     rs2_intrinsics intrinsics_left = cam_left.as<rs2::video_stream_profile>().get_intrinsics();
     width_img = intrinsics_left.width;
@@ -356,7 +345,7 @@ int main(int argc, char **argv) {
     double t_resize = 0.f;
     double t_track = 0.f;
 
-    while (!b_continue_session)
+    while (b_continue_session)
     {
         std::vector<rs2_vector> vGyro;
         std::vector<double> vGyro_times;
@@ -450,9 +439,9 @@ int main(int argc, char **argv) {
     #endif
 #endif
         // Stereo images are already rectified.
-        std::cout << "one iter" << std::endl;
-        Sophus::SE3f Tcw = SLAM.TrackStereo(im, imRight, timestamp, vImuMeas);
-        printSE3fComponents(Tcw);
+        auto result = SLAM.LocalizeStereo(im, imRight, timestamp, vImuMeas);
+        Sophus::SE3f Tcw = result.first;
+        // printSE3fComponents(Tcw);
         std::string data = serializePose(Tcw.matrix3x4());
 
         send(sock, data.c_str(), data.size(), 0);

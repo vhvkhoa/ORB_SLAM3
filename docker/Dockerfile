@@ -103,4 +103,7 @@ RUN mkdir -p /etc/apt/keyrings && \
     tee /etc/apt/sources.list.d/librealsense.list && \
     apt-get update && apt-get install -y librealsense2-dkms librealsense2-utils librealsense2-dev
 
+RUN ln -s /usr/bin/python3 /usr/bin/python
+RUN pip install open3d keyboard
+
 WORKDIR /workspace
