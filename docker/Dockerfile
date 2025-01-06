@@ -103,7 +103,10 @@ RUN mkdir -p /etc/apt/keyrings && \
     tee /etc/apt/sources.list.d/librealsense.list && \
     apt-get update && apt-get install -y librealsense2-dkms librealsense2-utils librealsense2-dev
 
+WORKDIR /workspace/Dev
 RUN ln -s /usr/bin/python3 /usr/bin/python
-RUN pip install open3d keyboard
+RUN wget https://raw.githubusercontent.com/vhvkhoa/ORB_SLAM3/refs/heads/master/Thirdparty/open3d_cpu-0.19.0%2B8fa74386d-cp38-cp38-manylinux_2_31_x86_64.whl
+RUN pip install -U pip 
+RUN pip install open3d_cpu-0.19.0+8fa74386d-cp38-cp38-manylinux_2_31_x86_64.whl keyboard ipython
 
 WORKDIR /workspace
