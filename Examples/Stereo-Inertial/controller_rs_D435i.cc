@@ -118,6 +118,7 @@ std::string serializePose(const Eigen::Matrix<float, 3, 4>& pose) {
     }
     std::string data = oss.str();
     data.pop_back();
+    data.push_back(' ');
     return data;
 }
 
